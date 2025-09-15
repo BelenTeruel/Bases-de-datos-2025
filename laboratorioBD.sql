@@ -1,3 +1,11 @@
+------------------------------------------------------------------------------------------------------
+
+
+-- PRACTICO 3 Joins y Conjuntos
+
+
+------------------------------------------------------------------------------------------------------
+
 -- 1. Lista el nombre de la ciudad, nombre del país, región y forma de gobierno 
 -- de las 10 ciudades más pobladas del mundo.
 
@@ -7,6 +15,7 @@ INNER JOIN country ON city.CountryCode = country.code
 ORDER BY city.Population DESC 
 LIMIT 10;
 
+----------------------------------------------------------------------------------------------------------------------------------
 
 -- 2. Listar los 10 países con menor población del mundo,
 -- junto a sus ciudades capitales (Hint: puede que uno de estos 
@@ -17,6 +26,7 @@ LEFT JOIN city ON country.Capital = city.Id
 ORDER BY country.Population ASC 
 LIMIT 10;
 
+----------------------------------------------------------------------------------------------------------------------------------
 
 -- 3. Listar el nombre, continente y todos los lenguajes oficiales de cada país. 
 -- (Hint: habrá más de una fila por país si tiene varios idiomas oficiales).
@@ -25,6 +35,7 @@ FROM country
 INNER JOIN countrylanguage ON country.code = countrylanguage.CountryCode 
 WHERE countrylanguage.IsOfficial = ‘T’;
 
+----------------------------------------------------------------------------------------------------------------------------------
 
 
 -- 4. Listar el nombre del país y nombre de capital, 
@@ -35,7 +46,7 @@ INNER JOIN city
 WHERE country.Capital = city.Id 
 ORDER BY country.SurfaceArea DESC 
 LIMIT 20;
-
+----------------------------------------------------------------------------------------------------------------------------------
 
 -- 5. Listar las ciudades junto a sus idiomas oficiales 
 -- (ordenado por la población de la ciudad) y el porcentaje de hablantes del idioma.
@@ -44,6 +55,8 @@ FROM city
 INNER JOIN countrylanguage ON city.CountryCode = countrylanguage.CountryCode 
 WHERE countrylanguage.IsOfficial = 'T' 
 ORDER BY city.Po pulation DESC
+
+----------------------------------------------------------------------------------------------------------------------------------
 
 -- 6. Listar los 10 países con mayor población y los 10 países con menor población 
 -- (que tengan al menos 100 habitantes) en la misma consulta.
@@ -65,6 +78,7 @@ UNION ALL
 )
 ORDER BY Population DESC;
 
+------------------------------------------------------------------------------------------------------
 
 -- 7. Listar aquellos países cuyos lenguajes oficiales son el Inglés y el Francés 
 -- (hint: no debería haber filas duplicadas).
@@ -87,6 +101,7 @@ AND EXISTS (
 )
 ORDER BY c.Name;
 
+------------------------------------------------------------------------------------------------------
 
 -- 8. Listar aquellos países que tengan hablantes del Inglés pero no del Español en su población.
 
@@ -102,6 +117,13 @@ WHERE cl.Language = 'Spanish';
 
 
 
+------------------------------------------------------------------------------------------------------
+
+
+-- PRACTICO 4 Consultas Anidadas y Agregaciones
+
+
+------------------------------------------------------------------------------------------------------
 -- 1. Listar el nombre de la ciudad y el nombre del país de todas las ciudades 
 -- que pertenezcan a países con una población menor a 10000 habitantes.
 
@@ -126,6 +148,7 @@ ORDER BY city.Name;
 -- Adamston / Pitcairn  .....  West Island / Cocos 
 
 
+----------------------------------------------------------------------------------------------------------------------------------
 
 -- 2. Listar todas aquellas ciudades cuya población sea mayor
 --  que la población promedio entre todas las ciudades.
@@ -156,6 +179,8 @@ ORDER BY city.Population DESC;
 --  Mumbai (Bombay) /  10500000   .....  Tai´an / 350696 
 
 
+----------------------------------------------------------------------------------------------------------------------------------
+
 -- 3. Listar todas aquellas ciudades no asiáticas cuya población
 --  sea igual o mayor a la población total de algún país de Asia.
 
@@ -178,6 +203,7 @@ ORDER BY city.Population DESC;
 -- de todas formas el resultado varia por el SOME, que toma la poblacion de algun pais de asia
 
 
+----------------------------------------------------------------------------------------------------------------------------------
 -- 4. Listar aquellos paises junto a sus idiomas no oficiales, que superen en porcentaje
 -- de hablantes a cada uno de los idiomas oficiales del pais. 
 
@@ -203,7 +229,7 @@ ORDER BY countrylanguage.Percentage DESC;
 -- wallis and futuna  / wallis   0
 
 
-
+----------------------------------------------------------------------------------------------------------------------------------
 
 -- 5. Listar (sin duplicados) aquellas regiones que tengan paises con una superficie menor a 1000 km2 
 -- y exista (en el pais) al menos una ciudad con mas de 100mil habitantes 
@@ -239,12 +265,110 @@ AND city.Population > 100000;
 -- | Southeast Asia |
 -- +----------------+
 
-
+----------------------------------------------------------------------------------------------------------------------------------
 
 -- 6. Listar el nombre de cada pais con la cantidad de habitantes de su ciudad mas poblada 
 -- (hint: hay dos maneras de llegar al mismo resultado. Usando consultas escalares o usando agrupaciones, encontrar ambas)
 
+-- Opcion 1:
+SELECT 
+    country.Name AS Pais,
+    (
+        SELECT max(city.Population)
+        FROM city city
+        WHERE city.CountryCode = country.Code 
+    ) AS CiudadMasPoblada
 
+FROM country
+WHERE EXISTS (
+    SELECT 1
+    FROM city
+    WHERE city.CountryCode = country.Code
+)
+ORDER BY CiudadMasPoblada DESC
+
+----------------------------------------------------------------------------------------------------------------------------------
+
+-- Opcion 2:
+SELECT 
+    country.Name AS Pais,
+    max(city.Population) AS CiudadMasPoblada
+FROM country  
+INNER JOIN city ON city.CountryCode = country.Code 
+GROUP BY country.Code, country.Name
+ORDER BY CiudadMasPoblada DESC
+
+-- resultado: India | 10500000  .....   Pitcairn / 42     
+
+
+----------------------------------------------------------------------------------------------------------------------------------
+
+-- 7. Listar aquellos países y sus lenguajes no oficiales cuyo porcentaje 
+-- de hablantes sea mayor al promedio de hablantes de los lenguajes oficiales.
+
+WITH avg_official AS (
+    SELECT avg(countrylanguage.Percentage) AS avg_oficial_percentage
+    FROM countrylanguage 
+    WHERE countrylanguage.IsOfficial = 'T'
+)
+SELECT 
+    country.Name AS Pais,
+    countrylanguage.Language AS Lenguaje,
+    countrylanguage.Percentage AS Porcentaje
+FROM country
+INNER JOIN countrylanguage ON countrylanguage.CountryCode = country.Code
+CROSS JOIN avg_official
+WHERE countrylanguage.Percentage > avg_oficial_percentage
+AND countrylanguage.IsOfficial = 'F'
+ORDER BY countrylanguage.Percentage DESC
+
+
+-- resultado:   
+-- Saint Kitts and Nevis  | Creole English   | 100   
+-- ...
+--  Samoa      | Samoan-English       | 52     
+
+----------------------------------------------------------------------------------------------------------------------------------
+
+-- 8. Listar la cantidad de habitantes por continente ordenado en forma descendente.
+SELECT 
+    country.Continent AS Continente,
+    sum(country.Population) AS Poblacion
+FROM country 
+GROUP BY country.Continent
+ORDER BY Poblacion DESC
+
+-- resultado: | Asia          | 3705025700 |  ...  Antarctica  / 0
+
+
+-- 9. Listar el promedio de esperanza de vida (LifeExpectancy) por continente 
+-- con una esperanza de vida entre 40 y 70 años.
+
+SELECT 
+    country.Continent AS Continente,
+    avg(country.LifeExpectancy) AS Esperanza_de_vida
+FROM country 
+GROUP BY country.Continent 
+HAVING avg(country.LifeExpectancy) BETWEEN 40 AND 70
+ORDER BY Esperanza_de_vida DESC
+
+-- Resultado:
+-- | Oceania    | 69.71500053405762 |
+-- | Asia       | 67.44117676978017 |
+-- | Africa     | 52.57192966394257 |
+
+
+-- 10. Listar la cantidad máxima, mínima, promedio y suma de habitantes por continente.
+
+SELECT 
+    country.Continent AS Continente,
+    max(country.Population) AS max_country_pop,
+    min(country.Population) AS min_country_pop,
+    avg(country.Population) AS avg_countries_pop,
+    sum(country.Population) AS sum_contruies_pop
+FROM country 
+GROUP BY country.Continent
+ORDER BY country.Continent ASC
 
 
 
