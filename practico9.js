@@ -283,3 +283,290 @@ db.createCollection( "userProfiles",
 // Cada comment tiene campo unico "movie_id" que referencia a la pelicula. 
 // En este caso, si se anidaran los comentarios dentro de un array para cada pelicula, el doc podria crecer muchisimo.
 // Al usar referencias, las consultas son mas eficientes y flexibles.
+
+
+
+// 7. Modelado 
+//  Queries
+//  1 - Listar el id, titulo, y precio de los libros y sus categorías de un autor en particular 
+//  2 - Cantidad de libros por categorías
+//  3 - Listar el nombre y dirección entrega y el monto total (quantity * price) 
+//      de sus pedidos para un order_id dado.
+
+
+// Debe crear el modelo de datos en mongodb aplicando las estrategias 
+// “Modelo de datos anidados” y Referencias. 
+// El modelo de datos debe permitir responder las queries de manera eficiente.
+// Inserte algunos documentos para las colecciones del modelo de datos.
+//  Opcionalmente puede especificar una regla de validación de esquemas para las colecciones. 
+
+
+
+// 4 colecciones: orders, books, authors, categories
+
+// collection book
+{
+    id: ObjectId("book0123456789"),
+    title: "titulo",
+    author: {
+        author_id:ObjectId("author0123456789"),
+        name: "Auth1"
+    },
+    price: 10.00,
+    
+    categories: [
+        { _id: ObjectId("cat00", name: "Cat0") },
+        { _id: ObjectId("cat01", name: "Cat1") }
+    ]
+}
+
+
+
+// query1: 
+ db.book.find(
+    { author.name: "Auth1" },
+    { _id: 0, title: 1, price: 1, categories: 1 }
+)
+
+// query 2
+db.book.aggregate(
+    { $unwind: "$categories" },
+    {
+        $group: {
+            _id: "$categories.name"
+            count: { $sum: 1 }
+        }
+    }
+)
+
+
+//  3 - Listar el nombre y dirección entrega y el monto total (quantity * price) 
+//      de sus pedidos para un order_id dado.
+
+
+//  Estructura de orders:
+{
+    _id: ObjectId("order123"),
+    
+    delivery_name: "Del Nombre",
+    delivery_address: "Del Address",
+    
+    cc_name: "ccName",
+    cc_number: "cc_num",
+    cc_expiry: "cc_exp",
+    
+    items: [
+        {
+            book_id: ObjectId("book123"),
+            quantity: 2,
+            price: 15.50,
+            title: "MongoDB Handbook"
+        },
+        {
+            book_id: ObjectId("book456"),
+            quantity: 1,
+            price: 25.00,
+            title: "JavaScript Guide"
+        }
+    ]
+}
+
+
+
+
+// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+// SOLUCIÓN 1: Con aggregate (más flexible y potente)
+// ====================================================
+db.orders.aggregate([
+    // Paso 1: Filtrar por order_id
+    { $match: { _id: ObjectId("order123") } },
+    
+    // Paso 2: Calcular el monto total
+    {
+        $project: {
+            _id: 0,
+            delivery_name: 1,
+            delivery_address: 1,
+            // Calcular total usando $reduce para sumar quantity * price de cada item
+            total_amount: {
+                $reduce: {
+                    input: "$items",
+                    initialValue: 0,
+                    in: { 
+                        $add: [
+                            "$$value", 
+                            { $multiply: ["$$this.quantity", "$$this.price"] }
+                        ] 
+                    }
+                }
+            },
+            // Opcional: mostrar también los items con su subtotal
+            items: {
+                $map: {
+                    input: "$items",
+                    as: "item",
+                    in: {
+                        title: "$$item.title",
+                        quantity: "$$item.quantity",
+                        price: "$$item.price",
+                        subtotal: { $multiply: ["$$item.quantity", "$$item.price"] }
+                    }
+                }
+            }
+        }
+    }
+])
+
+// Resultado esperado:
+// [
+//   {
+//     delivery_name: "Del Nombre",
+//     delivery_address: "Del Address",
+//     total_amount: 56.00,  // (2 * 15.50) + (1 * 25.00) = 31.00 + 25.00
+//     items: [
+//       { title: "MongoDB Handbook", quantity: 2, price: 15.50, subtotal: 31.00 },
+//       { title: "JavaScript Guide", quantity: 1, price: 25.00, subtotal: 25.00 }
+//     ]
+//   }
+// ]
+
+
+// SOLUCIÓN 2: Versión simplificada con $sum (más directo)
+// ========================================================
+db.orders.aggregate([
+    { $match: { _id: ObjectId("order123") } },
+    {
+        $project: {
+            _id: 0,
+            delivery_name: 1,
+            delivery_address: 1,
+            total_amount: {
+                $sum: {
+                    $map: {
+                        input: "$items",
+                        in: { $multiply: ["$$this.quantity", "$$this.price"] }
+                    }
+                }
+            }
+        }
+    }
+])
+
+
+// EXPLICACIÓN DETALLADA:
+// ======================
+
+/*
+¿Cómo funciona $reduce?
+-----------------------
+$reduce itera sobre un array y acumula un valor:
+
+1. input: "$items" → el array de items a procesar
+2. initialValue: 0 → empieza sumando desde 0
+3. in: { $add: [...] } → en cada iteración:
+   - $$value = valor acumulado hasta ahora
+   - $$this = item actual del array
+   - Calcula: $$value + (quantity * price)
+
+Ejemplo paso a paso:
+Item 1: 0 + (2 * 15.50) = 31.00
+Item 2: 31.00 + (1 * 25.00) = 56.00
+Resultado final: 56.00
+
+
+¿Cómo funciona $map + $sum?
+----------------------------
+$map transforma cada elemento del array:
+1. input: "$items" → array a transformar
+2. in: { $multiply: [...] } → para cada item, calcula quantity * price
+   Resultado: [31.00, 25.00]
+
+$sum suma todos los valores del array resultante:
+   $sum([31.00, 25.00]) = 56.00
+
+
+Variables especiales:
+---------------------
+$$value  → valor acumulado en $reduce
+$$this   → elemento actual del array que se está procesando
+$        → referencia a campos del documento actual (ej: "$items", "$price")
+*/
+
+
+// SOLUCIÓN 3: Si prefieres calcular en la aplicación (no recomendado pero posible)
+// =================================================================================
+db.orders.find(
+    { _id: ObjectId("order123") },
+    { 
+        delivery_name: 1,
+        delivery_address: 1,
+        items: 1,
+        _id: 0
+    }
+).forEach(order => {
+    const total = order.items.reduce((sum, item) => {
+        return sum + (item.quantity * item.price);
+    }, 0);
+    
+    printjson({
+        delivery_name: order.delivery_name,
+        delivery_address: order.delivery_address,
+        total_amount: total
+    });
+})
+
+
+// INSERTAR DOCUMENTOS DE EJEMPLO:
+// ================================
+db.orders.insertOne({
+    _id: ObjectId("673a1234567890abcdef0001"),
+    delivery_name: "Juan Pérez",
+    delivery_address: "Av. Siempre Viva 742, Springfield",
+    cc_name: "Juan Perez",
+    cc_number: "1234-5678-9012-3456",
+    cc_expiry: "12/2025",
+    items: [
+        {
+            book_id: ObjectId("673b1111111111111111111a"),
+            quantity: 2,
+            price: 15.50,
+            title: "MongoDB Handbook"
+        },
+        {
+            book_id: ObjectId("673b1111111111111111111b"),
+            quantity: 1,
+            price: 25.00,
+            title: "JavaScript Guide"
+        },
+        {
+            book_id: ObjectId("673b1111111111111111111c"),
+            quantity: 3,
+            price: 10.00,
+            title: "CSS Basics"
+        }
+    ]
+})
+
+// Probar la query:
+db.orders.aggregate([
+    { $match: { _id: ObjectId("673a1234567890abcdef0001") } },
+    {
+        $project: {
+            _id: 0,
+            delivery_name: 1,
+            delivery_address: 1,
+            total_amount: {
+                $reduce: {
+                    input: "$items",
+                    initialValue: 0,
+                    in: { $add: ["$$value", { $multiply: ["$$this.quantity", "$$this.price"] }] }
+                }
+            }
+        }
+    }
+])
+// Resultado: total_amount = 86.00  (31.00 + 25.00 + 30.00)
