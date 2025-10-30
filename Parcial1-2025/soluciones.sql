@@ -1,0 +1,116 @@
+
+-- 1. .​ Listar los 5 clientes que más ingresos han generado a lo largo del tiempo.
+
+SELECT 
+    c.CustomerID AS customer_id,
+    c.ContactName AS Nombre_contacto,
+    SUM(od.Quantity * od.UnitPrice - od.Discount) AS Total_ingreso
+FROM `Order Details` od
+INNER JOIN Orders o ON o.OrderID = od.OrderID
+INNER JOIN Customers c ON c.CustomerID = o.CustomerID
+GROUP BY c.CustomerID 
+ORDER BY Total_ingreso DESC;
+
+
+-- 2.Listar cada producto con sus ventas totales, agrupados por categoría.
+
+SELECT 
+    c.CategoryName AS Categoria,
+    p.ProductID AS Product_id,
+    p.ProductName AS Nombre,
+    SUM(od.Quantity) AS cantidad_producto_vendido 
+FROM Products p
+INNER JOIN `Order Details` od ON p.ProductID = od.ProductID
+INNER JOIN Categories c ON c.CategoryID = p.CategoryID
+GROUP BY c.CategoryName, p.ProductID
+ORDER BY c.categoryID ASC;
+
+
+-- 3. Calcular el total de ventas para cada categoría.
+SELECT 
+    c.CategoryID AS Categoria_ID,
+    c.CategoryName AS Categoria,
+    SUM(od.Quantity) AS ventas_totales 
+FROM `Order Details` od
+INNER JOIN Products p ON p.ProductID = od.ProductID
+INNER JOIN Categories c ON c.CategoryID = p.CategoryID
+GROUP BY p.CategoryID 
+ORDER BY p.CategoryID ASC;
+
+
+
+-- 4. Crear una vista que liste los empleados con más ventas por cada año, mostrando
+-- empleado, año y total de ventas. Ordenar el resultado por año ascendente.
+
+-- Esta query calcula el total de ventas de cada empleado en cada Año. Los Años estan repetidos.
+SELECT 
+    YEAR(o.OrderDate) AS Año, 
+    e.EmployeeID AS id_empleado,
+    CONCAT(e.FirstName, ' ', e.LastName) AS Nombre,
+    SUM(od.Quantity) AS cantidad_productos_vendidos
+FROM `Order Details` od
+INNER JOIN  Orders o ON o.OrderID = od.OrderID  
+INNER JOIN Employees e ON e.EmployeeID = o.EmployeeID
+GROUP BY  YEAR(o.OrderDate),e.EmployeeID 
+ORDER BY YEAR(o.OrderDate) ASC;
+
+
+
+
+-- En esta query intente filtrar el empleado con mayor ventas por Año pero no logre que funcionara. 
+WITH ventas_por_empleado AS (
+    SELECT 
+        YEAR(o.OrderDate) AS Año, 
+        e.EmployeeID AS id_empleado,
+        CONCAT(e.FirstName, ' ', e.LastName) AS Nombre,
+        SUM(od.Quantity) AS cantidad_productos_vendidos
+    FROM `Order Details` od
+    INNER JOIN  Orders o ON o.OrderID = od.OrderID  
+    INNER JOIN Employees e ON e.EmployeeID = o.EmployeeID
+    GROUP BY YEAR(o.OrderDate), e.EmployeeID 
+),
+ventas_max AS (
+    SELECT 
+        Año,
+        MAX(cantidad_productos_vendidos) AS prods_vendidos 
+    FROM ventas_por_empleado
+)
+SELECT 
+    vpe.Año,
+    vpe.id_empleado,
+    vpe.Nombre,
+    vm.prods_vendidos 
+FROM ventas_por_empleado vpe
+JOIN ventas_max vm
+ORDER BY vpe.Año ASC;
+
+
+
+
+-- 5.rear un trigger que se ejecute después de insertar un nuevo registro en la tabla
+-- Order Details. Este trigger debe 
+    -- actualizar la tabla Products para disminuir la
+-- cantidad en stock (UnitsInStock) del producto correspondiente, restando la
+-- cantidad (Quantity) que se acaba de insertar en el detalle del pedido.
+
+DELIMITER $$
+CREATE TRIGGER Update_stock_after_sale 
+AFTER INSERT ON `Order Details`
+FOR EACH ROW
+BEGIN 
+    UPDATE Products
+    SET UnitsInStock = UnitsInStock - NEW.Quantity
+    WHERE ProductID = NEW.ProductID 
+    AND UnitsInStock > 0 ;
+END $$
+DELIMITER ;
+
+
+
+-- 6. Crear un rol llamado admin y otorgarle los siguientes permisos:
+-- ●​ crear registros en la tabla Customers.
+-- ●​ actualizar solamente la columna Phone de Customers.
+
+CREATE ROLE adminT;
+GRANT INSERT ON northwind.Customers TO adminT ;
+GRANT UPDATE (Phone) ON northwind.Customers TO 'adminT';
