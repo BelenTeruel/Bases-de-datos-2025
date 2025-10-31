@@ -372,6 +372,60 @@ db.book.aggregate(
 }
 
 
+// Creacion de coleccion 'orders'
+
+db.createCollection(
+    "orders",
+    {
+        validator: {
+            $jsonSchema: {
+                bsonType: "object",
+                required: [ "_id", "delivey_name", "delivery_address", "items" ],
+                properties: {
+                    _id: {
+                        bsonType: "objectId"
+                    },
+                    delivery_name: {
+                        bsonType: "string"
+                    },
+                    delivery_address: {
+                        bsonType: "string"
+                    },
+                    cc_name: {
+                        bsonType: "string"
+                    },
+                    cc_number: {
+                        bsonType: "int"
+                    },
+                    cc_expiry: {
+                        bsonType: "date"
+                    },
+                    items: {
+                        bsonType: "array",
+                        required: ["book_id", "quantity", "price", "title"],
+                        properties: {
+                            book_id: {
+                                bsonType: "objectId"
+                            },
+                            quantity: {
+                                bsonType: "int"
+                            },
+                            price: {
+                                bsonType: "double"
+                            },
+                            title: {
+                                bsonType: "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        validationAction: "error",
+        validationLevel: "strict"
+    }
+)
+
 
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

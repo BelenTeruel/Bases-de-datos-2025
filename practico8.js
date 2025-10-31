@@ -332,11 +332,13 @@ db.restaurants.aggregate([
             name: 1,
             min_score: { $min: "$grades.score" },
             max_score: { $max: "$grades.score" },
-            sum_score: { $reduce: {
-                input: "$grades",
-                initialValue: 0,
-                in: { $add: [ "$$value", "$$this.score" ] }
-            } }
+            sum_score: { 
+                $reduce: {
+                    input: "$grades",
+                    initialValue: 0,
+                    in: { $add: [ "$$value", "$$this.score" ] }
+                } 
+            }
         }
     },
     { $sort: { name: 1 }}
