@@ -152,7 +152,137 @@ db.createView(
 //      - valor "NA" si el puntaje promedio está entre [0, 60), 
 //      - valor "A" si el puntaje promedio está entre [60, 80) 
 //      - valor "P" si el puntaje promedio está entre [80, 100].
-// HINTS: (i) para actualizar se puede usar pipeline de agregación. (ii) El operador
-// $cond o $switch pueden ser de utilidad.
+// HINTS: 
+//      (i) para actualizar se puede usar pipeline de agregación. 
+//      (ii) El operador $cond o $switch pueden ser de utilidad.
+
+db.grades.updateMany(
+    { "class_id": 339 },
+    [
+        {
+            $set: {
+                avg_score: { $avg: "$scores.score" }
+            }
+        },
+        {
+            $set: {
+                letter: {
+                    $switch: {
+                        branches: [
+                            {   
+                                case: {  $gte: ["$avg_score", 80] }, 
+                                then: "P" 
+                            },
+
+                            { 
+                                case: { $gte: ["$avg_score", 60] },  
+                                then: "A" 
+                            },
+                        ],
+                        default: "NA"
+                    }
+                }    
+            }
+        }
+        
+    ]
+)
+
+
+
+// 6. (a) Especificar reglas de validación en la colección grades para todos sus campos y
+// subdocumentos anidados. Inferir los tipos y otras restricciones que considere
+// adecuados para especificar las reglas a partir de los documentos de la colección.
+
+
+db.runCommand({
+    collMod: "grades",
+    validator: {
+        $jsonSchema: {
+            bsonType: "object",
+            required: ["_id", "student_id", "class_id"],
+            properties: {
+                _id: {   // redundante
+                    bsonType: "objectId",
+                },
+                student_id: {
+                    bsonType: "int",
+                },
+                scores: {
+                    bsonType: "array",
+                    items: {
+                        bsonType: "object",
+                        properties: {
+                            type: {
+                                bsonType: "string",
+                            },
+                            score: {
+                                bsonType: "double",
+                                minimum: 0.00,
+                                maximum: 100.00
+                            }
+                        }
+                    }
+                },
+                class_id: {
+                    bsonType: "int"
+                },
+                avg_score: {
+                    bsonType: "double"
+                },
+                letter: {
+                    bsonType: "string",
+                    enum: ["P", "A", "NA"]
+                }
+            }
+        }
+    },
+    validationAction: "error",
+    validationLevel: "strict"
+})
+
+
+
+// (b) Testear la regla de validación generando dos casos de fallas en la regla de
+// validación y un caso de éxito en la regla de validación. Aclarar en la entrega cuales
+// son los casos y por qué fallan y cuales cumplen la regla de validación. Los casos no
+// deben ser triviales, es decir los ejemplos deben contener todos los campos..
+
+// caso1 falla
+db.grades.insertOne({
+    student_id: 1001,
+    class_id: 502,
+    scores: [
+        { type: "exam", score: 88.5 },  // falla porq score double
+        { type: "homework", score: 92.3 }  //    ||
+    ],
+    avg_score: 90.25,
+    letter: "p"   // p no esta en enum
+});
+
+// caso2 falla
+db.grades.insertOne({
+    student_id: ObjectId('56d5f7ec604eb380b0d8f332'),  // no es objectId
+    class_id: 502,
+    scores: [
+        { type: "exam", score: 88.55 },  
+        { type: "homework", score: 92.34 } 
+    ],
+    avg_score: 90.25,
+    letter: "A"   
+});
+
+
+// caso que funciona
+db.grades.insertOne({
+    student_id: 1001, 
+    class_id: 502,
+    scores: [
+        { type: "exam", score: 88.55 },  
+        { type: "homework", score: 92.34 } 
+    ],
+    avg_score: 90.25,
+    letter: "A"   
+});
 
 
